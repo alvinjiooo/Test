@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Web Audio Oscillator with Sink ID Control</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    #sinkIdOptionDiv, #explicitSinkIdDiv, #availableDevicesDiv {
+      margin-bottom: 15px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    label {
+      display: inline-block;
+      width: 200px;
+      text-align: right;
+      margin-right: 10px;
+    }
+    input[type="text"] {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      width: 250px;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    #availableDevices {
+      white-space: pre-wrap; /* Preserve line breaks and spaces */
+      font-family: monospace;
+      font-size: small;
+      color: darkgreen;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Web Audio Oscillator with Sink ID Control</h1>
+
+  <p>This application requires access to your microphone to list audio output devices.</p>
+  <button id="requestPermissionButton">Request Microphone Permission</button>
+
+  <div id="sinkIdOptionDiv" style="display: none;">
+    <label for="sinkIdOption">Sink ID (AudioContext Options):</label>
+    <input type="text" id="sinkIdOption" placeholder="Optional sink ID">
+    <p style="font-size: smaller; color: gray;">This Sink ID will be used when the AudioContext is created.</p>
+  </div>
+
+  <button id="startButtonWithOptions" disabled>Start Oscillator (with Sink ID Option)</button>
+  <button id="stopButton" disabled>Stop Oscillator</button>
+
+  <hr>
+
+  <div id="explicitSinkIdDiv" style="display: none;">
+    <label for="explicitSinkId">Sink ID (Explicit setSinkId):</label>
+    <input type="text" id="explicitSinkId" placeholder="Sink ID to set">
+    <button id="setSinkIdButton" disabled>Set Sink ID</button>
+    <p style="font-size: smaller; color: gray;">Use this to try and change the audio output device after starting.</p>
+  </div>
+
+  <hr>
+
+  <div id="availableDevicesDiv">
+    <h2>Available Audio Output Devices</h2>
+    <pre id="availableDevices">Waiting for permission...</pre>
+    <p style="font-size: smaller; color: gray;">These are the available audio output devices on your system.</p>
+  </div>
+
+  <script>
+    let audioContext;
+    let oscillator;
+    let isPlaying = false;
+    const availableDevicesElement = document.getElementById('availableDevices');
+    const requestPermissionButton = document.getElementById('requestPermissionButton');
+    const sinkIdOptionDiv = document.getElementById('sinkIdOptionDiv');
+    const startButtonWithOptions = document.getElementById('startButtonWithOptions');
+    const stopButton = document.getElementById('stopButton');
+    const explicitSinkIdDiv = document.getElementById('explicitSinkIdDiv');
+    const setSinkIdButton = document.getElementById('setSinkIdButton');
+
+    async function requestMediaPermission() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        console.log("Microphone permission granted.");
+        stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately
+        await displayAvailableOutputDevices();
+        // Enable the rest of the UI after permission is granted
+        sinkIdOptionDiv.style.display = 'block';
+        startButtonWithOptions.disabled = false;
+        explicitSinkIdDiv.style.display = 'block';
+        setSinkIdButton.disabled = false;
+        requestPermissionButton.style.display = 'none'; // Hide the permission button
+      } catch (error) {
+        console.error("Error requesting microphone permission:", error);
+        availableDevicesElement.textContent = "Permission to access microphone denied.";
+      }
+    }
+
+    // Function to fetch and display available audio output devices
+    async function displayAvailableOutputDevices() {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          let outputDeviceList = "";
+          devices.forEach(device => {
+            if (device.kind === 'audiooutput') {
+              outputDeviceList += `Device ID: ${device.deviceId}\nLabel: ${device.label}\n\n`;
+            }
+          });
+          availableDevicesElement.textContent = outputDeviceList || "No audio output devices found.";
+        } catch (err) {
+          console.error('Error getting media devices:', err);
+          availableDevicesElement.textContent = "Error loading audio devices.";
+        }
+      } else {
+        availableDevicesElement.textContent = "Device enumeration not supported.";
+      }
+    }
+
+    requestPermissionButton.addEventListener('click', requestMediaPermission);
+
+    startButtonWithOptions.addEventListener('click', async () => {
+      if (!audioContext) {
+        const sinkId = sinkIdOptionInput.value.trim();
+        const audioContextOptions = sinkId ? { outputDevice: { sinkId: sinkId } } : {};
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
+          console.log("AudioContext created with options:", audioContextOptions);
+        } catch (error) {
+          console.error("Error creating AudioContext with specified sink ID:", error);
+          alert("Failed to create AudioContext with the specified Sink ID. Please check the ID and try again.");
+          return;
+        }
+      }
+
+      if (!isPlaying) {
+        oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 440;
+        oscillator.connect(audioContext.destination);
+        oscillator.start();
+        isPlaying = true;
+        startButtonWithOptions.disabled = true;
+        stopButton.disabled = false;
+        console.log("Oscillator started.");
+      }
+    });
+
+    stopButton.addEventListener('click', () => {
+      if (isPlaying && oscillator) {
+        oscillator.stop();
+        oscillator.disconnect();
+        oscillator = null;
+        isPlaying = false;
+        startButtonWithOptions.disabled = false;
+        stopButton.disabled = true;
+        console.log("Oscillator stopped.");
+      }
+    });
+
+    setSinkIdButton.addEventListener('click', async () => {
+      if (audioContext) {
+        const newSinkId = explicitSinkIdInput.value.trim();
+        if (newSinkId) {
+          try {
+            await audioContext.setSinkId(newSinkId);
+            console.log(`Sink ID explicitly set to: ${newSinkId}`);
+            alert(`Sink ID successfully set to: ${newSinkId}`);
+          } catch (error) {
+            console.error("Error setting sink ID:", error);
+            alert("Failed to set the Sink ID. Please check the ID and ensure an AudioContext is running and the ID is valid.");
+          }
+        } else {
+          alert("Please enter a Sink ID to set.");
+        }
+      } else {
+        alert("AudioContext not initialized. Please start the oscillator first.");
+      }
+    });
+  </script>
+
+</body>
+</html>
