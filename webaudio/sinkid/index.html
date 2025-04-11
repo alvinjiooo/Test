@@ -167,7 +167,7 @@
     startButtonWithOptions.addEventListener('click', async () => {
       if (!audioContext) {
         const sinkId = sinkIdOptionText.value;
-        const audioContextOptions = sinkId ? { outputDevice: { sinkId: sinkId } } : {};
+        const audioContextOptions = sinkId ? { sinkId: sinkId } : {};
         try {
           audioContext = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
           console.log("AudioContext created with options:", audioContextOptions);
