@@ -6,7 +6,7 @@
     body {
       font-family: sans-serif;
     }
-    #sinkIdOptionDiv, #explicitSinkIdDiv, #availableDevicesDiv {
+    #sinkIdOptionDiv, #explicitSinkIdDiv, #availableDevicesDiv, #audioContextInfoDiv {
       margin-bottom: 15px;
       padding: 10px;
       border: 1px solid #ccc;
@@ -44,6 +44,15 @@
       font-size: small;
       color: darkgreen;
     }
+    #audioContextInfo {
+      font-family: monospace;
+      font-size: small;
+      color: navy;
+    }
+    .error-indicator {
+      color: red;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -55,7 +64,7 @@
 
   <div id="sinkIdOptionDiv" style="display: none;">
     <label for="sinkIdOption">Sink ID (AudioContext Options):</label>
-    <input type="text" id="sinkIdOption" placeholder="Optional sink ID">
+    <input id="sinkIdOptionInput" type="text" id="sinkIdOption" placeholder="Optional sink ID">
     <p style="font-size: smaller; color: gray;">This Sink ID will be used when the AudioContext is created.</p>
   </div>
 
@@ -66,7 +75,7 @@
 
   <div id="explicitSinkIdDiv" style="display: none;">
     <label for="explicitSinkId">Sink ID (Explicit setSinkId):</label>
-    <input type="text" id="explicitSinkId" placeholder="Sink ID to set">
+    <input id="explicitSinkIdInput" type="text" id="explicitSinkId" placeholder="Sink ID to set">
     <button id="setSinkIdButton" disabled>Set Sink ID</button>
     <p style="font-size: smaller; color: gray;">Use this to try and change the audio output device after starting.</p>
   </div>
@@ -79,6 +88,15 @@
     <p style="font-size: smaller; color: gray;">These are the available audio output devices on your system.</p>
   </div>
 
+  <hr>
+
+  <div id="audioContextInfoDiv">
+    <h2>AudioContext Information</h2>
+    <pre id="audioContextInfo">Not yet initialized.</pre>
+    <p style="font-size: smaller; color: gray;">Displays the current Sink ID and state of the AudioContext.</p>
+    <p><span class="error-indicator">Error Event Dispatched:</span> <span id="errorEventStatus">No</span></p>
+  </div>
+
   <script>
     let audioContext;
     let oscillator;
@@ -86,10 +104,24 @@
     const availableDevicesElement = document.getElementById('availableDevices');
     const requestPermissionButton = document.getElementById('requestPermissionButton');
     const sinkIdOptionDiv = document.getElementById('sinkIdOptionDiv');
+    const sinkIdOptionText = document.getElementById('sinkIdOptionInput');
     const startButtonWithOptions = document.getElementById('startButtonWithOptions');
     const stopButton = document.getElementById('stopButton');
     const explicitSinkIdDiv = document.getElementById('explicitSinkIdDiv');
+    const explicitSinkIdInput = document.getElementById('explicitSinkIdInput');
     const setSinkIdButton = document.getElementById('setSinkIdButton');
+    const audioContextInfoElement = document.getElementById('audioContextInfo');
+    const errorEventStatusElement = document.getElementById('errorEventStatus');
+    let errorEventDispatched = false; // Flag to track error events
+ 
+    function updateAudioContextInfo() {
+      if (audioContext) {
+        audioContextInfoElement.textContent = `Sink ID: ${audioContext.sinkId}\nState: ${audioContext.state}`;
+      } else {
+        audioContextInfoElement.textContent = "Not yet initialized.";
+      }
+      errorEventStatusElement.textContent = errorEventDispatched ? 'Yes' : 'No';
+    }
 
     async function requestMediaPermission() {
       try {
@@ -134,7 +166,7 @@
 
     startButtonWithOptions.addEventListener('click', async () => {
       if (!audioContext) {
-        const sinkId = sinkIdOptionDiv.value.trim();
+        const sinkId = sinkIdOptionText.value;
         const audioContextOptions = sinkId ? { outputDevice: { sinkId: sinkId } } : {};
         try {
           audioContext = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
@@ -156,6 +188,12 @@
         startButtonWithOptions.disabled = true;
         stopButton.disabled = false;
         console.log("Oscillator started.");
+        audioContext.addEventListener('error', (event) => {
+          console.error("AudioContext Error:", event);
+          errorEventDispatched = true;
+          updateAudioContextInfo();
+        });
+        updateAudioContextInfo();
       }
     });
 
@@ -168,6 +206,7 @@
         startButtonWithOptions.disabled = false;
         stopButton.disabled = true;
         console.log("Oscillator stopped.");
+        updateAudioContextInfo();
       }
     });
 
@@ -179,9 +218,11 @@
             await audioContext.setSinkId(newSinkId);
             console.log(`Sink ID explicitly set to: ${newSinkId}`);
             alert(`Sink ID successfully set to: ${newSinkId}`);
+            updateAudioContextInfo();
           } catch (error) {
             console.error("Error setting sink ID:", error);
             alert("Failed to set the Sink ID. Please check the ID and ensure an AudioContext is running and the ID is valid.");
+            updateAudioContextInfo();
           }
         } else {
           alert("Please enter a Sink ID to set.");
