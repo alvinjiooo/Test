@@ -134,7 +134,7 @@
 
     startButtonWithOptions.addEventListener('click', async () => {
       if (!audioContext) {
-        const sinkId = sinkIdOptionInput.value.trim();
+        const sinkId = sinkIdOptionDiv.value.trim();
         const audioContextOptions = sinkId ? { outputDevice: { sinkId: sinkId } } : {};
         try {
           audioContext = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
